@@ -122,20 +122,16 @@ static void dphy_hs_clk_enable_for_umb9230s(struct sprd_dsi *dsi)
 	sprd_dphy_hs_clk_en(dsi->phy, true);
 }
 
-static void sprd_dsi_enable_panel_dithering(struct drm_panel *p)
+static void sprd_dsi_enable_panel_dithering(struct sprd_panel *panel)
 {
 	/* ST7365P MODESEL: dither RGB888 input to the internal 6-bit channels. */
 	static const u8 cmds[][2] = {
 		{ 0xf0, 0xc3 }, { 0xf0, 0x96 }, { 0xb9, 0x02 },
 		{ 0xf0, 0x3c }, { 0xf0, 0x69 },
 	};
-	struct sprd_panel *panel;
 	ssize_t ret = 0;
 	size_t i;
 
-	if (!p)
-		return;
-	panel = to_sprd_panel(p);
 	if (!panel->info.of_node ||
 	    !of_node_name_eq(panel->info.of_node, "lcd_st7365p_mipi_hdp") ||
 	    panel->info.format != MIPI_DSI_FMT_RGB888)
@@ -149,9 +145,7 @@ static void sprd_dsi_enable_panel_dithering(struct drm_panel *p)
 				continue;
 			ret = mipi_dsi_generic_write(panel->slave, cmds[i], 2);
 			if (ret < 0)
-				dev_err(&panel->slave->dev,
-					"ST7365P dithering command %02x %02x failed: %zd\n",
-					cmds[i][0], cmds[i][1], ret);
+				DRM_ERROR("ST7365P dithering failed: %zd\n", ret);
 		}
 	}
 	mutex_unlock(&panel->lock);
@@ -190,7 +184,7 @@ static void sprd_dsi_encoder_enable(struct drm_encoder *encoder)
 		}
 
 		/* Bootloader handoff skips drm_panel_enable() on the first enable. */
-		sprd_dsi_enable_panel_dithering(dsi->panel);
+		sprd_dsi_enable_panel_dithering(panel);
 		mutex_unlock(&dsi->lock);
 		return;
 	}
@@ -219,7 +213,7 @@ static void sprd_dsi_encoder_enable(struct drm_encoder *encoder)
 		} else {
 			drm_panel_prepare(dsi->panel);
 			drm_panel_enable(dsi->panel);
-			sprd_dsi_enable_panel_dithering(dsi->panel);
+			sprd_dsi_enable_panel_dithering(panel);
 			if (dsi->ctx.dpms == DRM_MODE_DPMS_STANDBY) {
 				DRM_INFO("%s(panel enter doze)\n", __func__);
 				sprd_panel_enter_doze(dsi->panel);
